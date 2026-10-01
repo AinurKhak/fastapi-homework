@@ -1,63 +1,115 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI()
+
+app = FastAPI(
+    title="Цифровой городовой API",
+    description="Сервис для работы с обращениями о проблемах городской инфраструктуры",
+    version="1.0"
+)
 
 
-# Модель данных, которые будут приходить в body
-class Task(BaseModel):
-    title: str
+# Описываем структуру обращения
+class Report(BaseModel):
+    category: str
     description: str
-    completed: bool = False
+    address: str
+    status: str = "Опубликовано"
 
 
-# Временное хранилище вместо базы данных
-tasks = {
-    1: Task(
-        title="Изучить FastAPI",
-        description="Разобраться с GET и POST",
-        completed=False
+# Временное хранилище обращений
+reports = {
+    1: Report(
+        category="Дороги",
+        description="Большая яма на дороге",
+        address="ул. Ленина, 10",
+        status="Опубликовано"
     ),
-    2: Task(
-        title="Сделать домашнее задание",
-        description="Написать свой API",
-        completed=True
+    2: Report(
+        category="Мусор",
+        description="Переполнена урна",
+        address="ул. Советская, 212",
+        status="В работе"
+    ),
+    3: Report(
+        category="Освещение",
+        description="Не работает уличный фонарь",
+        address="ул. Гагарина, 25",
+        status="Выполнено"
     )
 }
 
 
-# QUERY-параметр
-# Пример: GET /tasks?completed=true
-@app.get("/tasks")
-def get_tasks(completed: bool | None = None):
-    if completed is None:
-        return tasks
-
+# Главная страница
+@app.get("/")
+def root():
     return {
-        task_id: task
-        for task_id, task in tasks.items()
-        if task.completed == completed
+        "service": "Цифровой городовой",
+        "message": "API работает",
+        "reports_count": len(reports)
     }
 
 
-# PATH-параметр
-# Пример: GET /tasks/1
-@app.get("/tasks/{task_id}")
-def get_task(task_id: int):
-    if task_id not in tasks:
-        return {"error": "Задача не найдена"}
+# Получение всех обращений
+# status является QUERY-параметром
+# Например: /reports?status=Опубликовано
+@app.get("/reports")
+def get_reports(status: str | None = None):
 
-    return tasks[task_id]
-
-
-# BODY-параметр + POST
-# Пример: POST /tasks
-@app.post("/tasks")
-def create_task(task: Task):
-    task_id = max(tasks.keys(), default=0) + 1
-    tasks[task_id] = task
+    if status is None:
+        return reports
 
     return {
-        "id": task_id,
-        "task": task
+        report_id: report
+        for report_id, report in reports.items()
+        if report.status.lower() == status.lower()
+    }
+
+
+# Получение конкретного обращения
+# report_id является PATH-параметром
+# Например: /reports/1
+@app.get("/reports/{report_id}")
+def get_report(report_id: int):
+
+    if report_id not in reports:
+        raise HTTPException(
+            status_code=404,
+            detail="Обращение не найдено"
+        )
+
+    return reports[report_id]
+
+
+# Создание нового обращения
+# report передаётся через BODY
+@app.post("/reports")
+def create_report(report: Report):
+
+    report_id = max(reports.keys(), default=0) + 1
+
+    reports[report_id] = report
+
+    return {
+        "message": "Обращение успешно создано",
+        "id": report_id,
+        "report": report
+    }
+
+
+# Удаление обращения
+@app.delete("/reports/{report_id}")
+def delete_report(report_id: int):
+
+    if report_id not in reports:
+        raise HTTPException(
+            status_code=404,
+            detail="Обращение не найдено"
+        )
+
+    deleted_report = reports.pop(report_id)
+
+    return {
+        "message": "Обращение удалено",
+        "report": deleted_report
     }
